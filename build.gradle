@@ -1,0 +1,15 @@
+plugins {
+    id 'com.android.application'
+}
+android {
+    namespace 'fi.niroshan.dnalauncher'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'fi.niroshan.dnalauncher'
+        minSdk 23
+        targetSdk 32
+        versionCode 1
+        versionName '1.0'
+    }
+}
