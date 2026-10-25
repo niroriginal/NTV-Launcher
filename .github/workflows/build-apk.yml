@@ -1,1 +1,45 @@
 
+name: Build DNA Launcher APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Extract launcher project ZIP
+        run: |
+          mkdir extracted
+          unzip -o DNA_Cinematic_TV_Launcher_Phone_Build.zip -d extracted
+          cp -a extracted/DNA_Cinematic_TV_Launcher/. .
+          if [ -d extracted/app ]; then cp -a extracted/app/. app/; fi
+
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build APK
+        run: |
+          gradle --version || true
+          gradle --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DNA-Cinematic-TV-Launcher-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+
