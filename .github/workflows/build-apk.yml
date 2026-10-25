@@ -7,6 +7,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,6 +17,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Show repository files
+        run: |
+          echo "Repository root:"
+          pwd
+          echo "Files:"
+          find . -maxdepth 5 -type f \
+            -not -path "./.git/*" | head -200
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -26,43 +37,52 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
-      - name: Find and extract launcher ZIP
+      - name: Find and extract project ZIP
+        shell: bash
         run: |
-          ZIP_FILE="DNA_Cinematic_TV_Launcher_Phone_Build.zip"
+          ZIP_FILE="$(find . -type f -iname '*.zip' \
+            -not -path './.git/*' | head -n 1)"
 
-          if [ ! -f "$ZIP_FILE" ]; then
-            echo "ERROR: Launcher ZIP not found: $ZIP_FILE"
-            echo "Files in repository:"
-            ls -la
+          if [ -z "$ZIP_FILE" ]; then
+            echo "::error::No ZIP file found in the repository."
+            echo "Upload and commit the launcher ZIP to the main branch."
             exit 1
           fi
 
+          echo "Found archive: $ZIP_FILE"
           mkdir -p buildsrc
           unzip -o "$ZIP_FILE" -d buildsrc
 
           echo "Extracted project files:"
-          ls -la buildsrc
+          find buildsrc -maxdepth 5 -type f | head -200
 
-      - name: Verify Android project
+      - name: Locate Android project
+        shell: bash
         run: |
-          if [ ! -f buildsrc/settings.gradle ] && \
-             [ ! -f buildsrc/settings.gradle.kts ]; then
-            echo "ERROR: settings.gradle not found at ZIP root."
-            echo "Checking extracted folders:"
-            find buildsrc -maxdepth 4 -type f | head -100
+          SETTINGS_FILE="$(find buildsrc -type f \
+            \( -name settings.gradle \
+            -o -name settings.gradle.kts \) | head -n 1)"
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "::error::settings.gradle was not found in the ZIP."
             exit 1
           fi
 
-          if [ ! -f buildsrc/app/build.gradle ] && \
-             [ ! -f buildsrc/app/build.gradle.kts ]; then
-            echo "ERROR: App Gradle file not found."
-            find buildsrc -maxdepth 4 -type f
+          PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Android project directory: $PROJECT_DIR"
+
+          if [ ! -f "$PROJECT_DIR/app/build.gradle" ] && \
+             [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
+            echo "::error::The app Gradle build file was not found."
             exit 1
           fi
 
       - name: Build debug APK
-        working-directory: buildsrc
+        shell: bash
         run: |
+          cd "$PROJECT_DIR"
+
           if [ -f gradlew ]; then
             chmod +x gradlew
             ./gradlew assembleDebug
@@ -74,6 +94,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DNA-TV-Launcher-APK
-          path: buildsrc/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
