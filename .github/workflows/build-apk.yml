@@ -31,13 +31,13 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
 
-      - name: Install Android SDK packages
-        run: |
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
-          sdkmanager --licenses
-
-      - name: Check project files
+      - name: Verify project files
         run: |
           test -f settings.gradle
           test -f build.gradle
@@ -47,7 +47,7 @@ jobs:
           test -f app/src/main/res/drawable/tv_banner.xml
           echo "All required files found."
 
-      - name: Build debug APK
+      - name: Build APK
         run: gradle assembleDebug
 
       - name: Upload APK
