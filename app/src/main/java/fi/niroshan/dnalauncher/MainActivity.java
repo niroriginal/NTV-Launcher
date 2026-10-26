@@ -5,13 +5,16 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.content.Intent;
 import android.content.ComponentName;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -22,13 +25,22 @@ import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class MainActivity extends Activity {
 
-    private final int bg = Color.rgb(12, 15, 27);
-    private final int purple = Color.rgb(111, 82, 230);
+    private LinearLayout root;
     private LinearLayout appRow;
+    private View wallpaperView;
+    private SharedPreferences prefs;
+
+    private String wallpaper = "Aurora";
+    private String accent = "Violet";
+    private boolean animations = true;
+
+    private final int white = Color.WHITE;
+    private final int muted = 0xFFB8C1D8;
 
     private int dp(float value) {
         return (int) (value *
@@ -36,254 +48,245 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public void onCreate(Bundle state) {
+        super.onCreate(state);
 
-        getWindow().setStatusBarColor(bg);
-        getWindow().setNavigationBarColor(bg);
+        prefs = getSharedPreferences("odyssy_settings", MODE_PRIVATE);
+        wallpaper = prefs.getString("wallpaper", "Aurora");
+        accent = prefs.getString("accent", "Violet");
+        animations = prefs.getBoolean("animations", true);
+
+        getWindow().setStatusBarColor(Color.rgb(10, 12, 25));
+        getWindow().setNavigationBarColor(Color.rgb(10, 12, 25));
 
         buildScreen();
     }
 
-    private TextView text(
-            String value, int size, int color, boolean bold) {
+    private int accentColor() {
+        switch (accent) {
+            case "Blue":
+                return Color.rgb(52, 125, 246);
+            case "Pink":
+                return Color.rgb(225, 75, 163);
+            case "Green":
+                return Color.rgb(38, 170, 126);
+            case "Amber":
+                return Color.rgb(227, 145, 45);
+            default:
+                return Color.rgb(119, 83, 244);
+        }
+    }
 
+    private int[] wallpaperColors() {
+        switch (wallpaper) {
+            case "Midnight":
+                return new int[] {
+                    Color.rgb(30, 35, 58),
+                    Color.rgb(12, 15, 27),
+                    Color.rgb(5, 7, 15)
+                };
+            case "Ocean":
+                return new int[] {
+                    Color.rgb(16, 105, 143),
+                    Color.rgb(16, 42, 77),
+                    Color.rgb(7, 13, 28)
+                };
+            case "Sunset":
+                return new int[] {
+                    Color.rgb(169, 72, 91),
+                    Color.rgb(75, 43, 96),
+                    Color.rgb(14, 15, 34)
+                };
+            default:
+                return new int[] {
+                    accentColor(),
+                    Color.rgb(35, 38, 86),
+                    Color.rgb(8, 11, 24)
+                };
+        }
+    }
+
+    private GradientDrawable gradient(int[] colors, int radius) {
+        GradientDrawable d = new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR, colors);
+        d.setCornerRadius(dp(radius));
+        return d;
+    }
+
+    private TextView makeText(
+            String value, int size, int color, boolean bold) {
         TextView t = new TextView(this);
         t.setText(value);
         t.setTextSize(size);
         t.setTextColor(color);
         t.setGravity(Gravity.CENTER_VERTICAL);
-
         if (bold) {
             t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         }
-
         return t;
     }
 
-    private GradientDrawable rounded(int color, int radius) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setColor(color);
-        shape.setCornerRadius(dp(radius));
-        return shape;
+    private LinearLayout vertical() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        return l;
+    }
+
+    private LinearLayout horizontal() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.HORIZONTAL);
+        l.setGravity(Gravity.CENTER_VERTICAL);
+        return l;
     }
 
     private void buildScreen() {
         ScrollView page = new ScrollView(this);
         page.setFillViewport(true);
+        page.setBackground(gradient(wallpaperColors(), 0));
 
-        GradientDrawable wallpaper = new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            new int[] {
-                Color.rgb(22, 20, 46),
-                Color.rgb(12, 15, 27),
-                Color.rgb(8, 11, 20)
-            }
-        );
-        page.setBackground(wallpaper);
-
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(42), dp(24), dp(42), dp(32));
-
+        root = vertical();
+        root.setPadding(dp(38), dp(24), dp(38), dp(32));
         page.addView(root);
 
-        // Odyssy brand header
-        LinearLayout header = new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
+        // Brand header
+        LinearLayout header = horizontal();
 
-        TextView logo = text("ODYSSY", 30, Color.WHITE, true);
+        TextView logo = makeText("ODYSSY", 29, white, true);
         header.addView(logo);
 
-        TextView brandSuffix =
-            text("  TV", 15, 0xFFB8A8FF, true);
-        header.addView(brandSuffix);
+        TextView suffix = makeText("  TV", 14, accentColor(), true);
+        header.addView(suffix);
 
         View spacer = new View(this);
         header.addView(spacer,
             new LinearLayout.LayoutParams(0, 1, 1));
 
-        TextView headerLabel = text(
-            "YOUR ENTERTAINMENT",
-            12, 0xFFB7C4E0, true
-        );
-        header.addView(headerLabel);
+        TextView settings = makeText("⚙  SETTINGS", 13, white, true);
+        settings.setPadding(dp(15), dp(10), dp(15), dp(10));
+        settings.setBackground(gradient(
+            new int[] { 0x443F4A70, 0x223F4A70 }, 14));
+        settings.setFocusable(true);
+        settings.setOnClickListener(v -> showSettings());
+        header.addView(settings);
 
         root.addView(header);
 
-        // Welcome section
-        TextView eyebrow = text(
-            "YOUR NEXT ADVENTURE STARTS HERE",
-            11, 0xFFB9A8FF, true
-        );
-
-        LinearLayout.LayoutParams eyebrowParams =
+        TextView eyebrow = makeText(
+            "YOUR ENTERTAINMENT UNIVERSE",
+            11, accentColor(), true);
+        LinearLayout.LayoutParams ep =
             new LinearLayout.LayoutParams(-1, -2);
-        eyebrowParams.topMargin = dp(30);
+        ep.topMargin = dp(28);
+        root.addView(eyebrow, ep);
 
-        root.addView(eyebrow, eyebrowParams);
-
-        TextView heading = text(
-            "Everything you love.",
-            34, Color.WHITE, true
-        );
-
-        LinearLayout.LayoutParams headingParams =
+        TextView title = makeText(
+            "Everything you love.", 34, white, true);
+        LinearLayout.LayoutParams tp =
             new LinearLayout.LayoutParams(-1, -2);
-        headingParams.topMargin = dp(7);
+        tp.topMargin = dp(7);
+        root.addView(title, tp);
 
-        root.addView(heading, headingParams);
-
-        TextView intro = text(
-            "Your apps. Your screen. Your Odyssy.",
-            15, 0xFFB4BCD0, false
-        );
-
-        LinearLayout.LayoutParams introParams =
+        TextView intro = makeText(
+            "One screen. Endless possibilities.",
+            15, muted, false);
+        LinearLayout.LayoutParams ip =
             new LinearLayout.LayoutParams(-1, -2);
-        introParams.topMargin = dp(5);
-
-        root.addView(intro, introParams);
+        ip.topMargin = dp(5);
+        root.addView(intro, ip);
 
         // Cinematic hero banner
-        LinearLayout hero = new LinearLayout(this);
-        hero.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout hero = vertical();
         hero.setGravity(Gravity.CENTER_VERTICAL);
-        hero.setPadding(dp(30), dp(24), dp(30), dp(24));
+        hero.setPadding(dp(28), dp(22), dp(28), dp(22));
+        hero.setBackground(gradient(wallpaperColors(), 22));
+        hero.setFocusable(false);
 
-        GradientDrawable heroBackground = new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            new int[] {
-                Color.rgb(112, 59, 211),
-                Color.rgb(58, 57, 143),
-                Color.rgb(22, 31, 60)
-            }
-        );
-        heroBackground.setCornerRadius(dp(22));
-        hero.setBackground(heroBackground);
-
-        TextView heroTag = text(
-            "ODYSSY  /  ENTERTAINMENT",
-            12, 0xFFE0D8FF, true
-        );
+        TextView heroTag = makeText(
+            "O D Y S S Y   /   HOME",
+            12, 0xFFE7E0FF, true);
         hero.addView(heroTag);
 
-        TextView heroTitle = text(
-            "Make tonight cinematic.",
-            29, Color.WHITE, true
-        );
-
-        LinearLayout.LayoutParams heroTitleParams =
+        TextView heroTitle = makeText(
+            "Your next adventure starts here.",
+            27, white, true);
+        LinearLayout.LayoutParams htp =
             new LinearLayout.LayoutParams(-1, -2);
-        heroTitleParams.topMargin = dp(12);
+        htp.topMargin = dp(12);
+        hero.addView(heroTitle, htp);
 
-        hero.addView(heroTitle, heroTitleParams);
-
-        TextView heroSubtitle = text(
-            "Your favourite entertainment, all in one place.",
-            15, 0xFFE0E4F6, false
-        );
-
-        LinearLayout.LayoutParams heroSubtitleParams =
+        TextView heroDesc = makeText(
+            "Discover your favourite apps and entertainment.",
+            14, 0xFFE1E5F5, false);
+        LinearLayout.LayoutParams hdp =
             new LinearLayout.LayoutParams(-1, -2);
-        heroSubtitleParams.topMargin = dp(7);
+        hdp.topMargin = dp(8);
+        hero.addView(heroDesc, hdp);
 
-        hero.addView(heroSubtitle, heroSubtitleParams);
+        LinearLayout.LayoutParams hp =
+            new LinearLayout.LayoutParams(-1, dp(170));
+        hp.topMargin = dp(22);
+        root.addView(hero, hp);
 
-        LinearLayout.LayoutParams heroParams =
-            new LinearLayout.LayoutParams(-1, dp(178));
-        heroParams.topMargin = dp(23);
-
-        root.addView(hero, heroParams);
-
-        // App section
-        TextView appsTitle = text(
-            "Your apps", 23, Color.WHITE, true
-        );
-
-        LinearLayout.LayoutParams appsTitleParams =
+        TextView appsTitle = makeText(
+            "Your apps", 23, white, true);
+        LinearLayout.LayoutParams atp =
             new LinearLayout.LayoutParams(-1, -2);
-        appsTitleParams.topMargin = dp(28);
+        atp.topMargin = dp(26);
+        root.addView(appsTitle, atp);
 
-        root.addView(appsTitle, appsTitleParams);
-
-        TextView hint = text(
-            "Choose an app to start exploring",
-            13, 0xFF9EAAC4, false
-        );
-
-        LinearLayout.LayoutParams hintParams =
+        TextView hint = makeText(
+            "Choose an app to begin",
+            13, muted, false);
+        LinearLayout.LayoutParams hintp =
             new LinearLayout.LayoutParams(-1, -2);
-        hintParams.topMargin = dp(5);
+        hintp.topMargin = dp(5);
+        root.addView(hint, hintp);
 
-        root.addView(hint, hintParams);
+        HorizontalScrollView hsv = new HorizontalScrollView(this);
+        hsv.setHorizontalScrollBarEnabled(false);
+        hsv.setFocusable(false);
+        hsv.setClipToPadding(false);
 
-        HorizontalScrollView horizontal =
-            new HorizontalScrollView(this);
+        appRow = horizontal();
+        appRow.setPadding(dp(5), dp(17), dp(12), dp(20));
+        hsv.addView(appRow);
 
-        horizontal.setHorizontalScrollBarEnabled(false);
-        horizontal.setClipToPadding(false);
-        horizontal.setFocusable(false);
-
-        appRow = new LinearLayout(this);
-        appRow.setOrientation(LinearLayout.HORIZONTAL);
-        appRow.setPadding(dp(5), dp(18), dp(12), dp(20));
-
-        horizontal.addView(appRow);
-
-        root.addView(horizontal,
+        root.addView(hsv,
             new LinearLayout.LayoutParams(-1, -2));
 
         setContentView(page);
-
         loadApps();
     }
 
-    // Discover installed TV and regular launcher apps
     private void loadApps() {
         appRow.removeAllViews();
 
         PackageManager pm = getPackageManager();
+        Map<String, ResolveInfo> found = new LinkedHashMap<>();
 
-        Map<String, ResolveInfo> found =
-            new LinkedHashMap<>();
+        Intent tv = new Intent(Intent.ACTION_MAIN);
+        tv.addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
 
-        Intent tvIntent = new Intent(Intent.ACTION_MAIN);
-        tvIntent.addCategory(
-            Intent.CATEGORY_LEANBACK_LAUNCHER);
-
-        List<ResolveInfo> tvApps =
-            pm.queryIntentActivities(tvIntent, 0);
-
-        for (ResolveInfo info : tvApps) {
-            addApp(found, info);
+        for (ResolveInfo r : pm.queryIntentActivities(tv, 0)) {
+            addApp(found, r);
         }
 
-        Intent normalIntent = new Intent(Intent.ACTION_MAIN);
-        normalIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+        Intent normal = new Intent(Intent.ACTION_MAIN);
+        normal.addCategory(Intent.CATEGORY_LAUNCHER);
 
-        List<ResolveInfo> normalApps =
-            pm.queryIntentActivities(normalIntent, 0);
-
-        for (ResolveInfo info : normalApps) {
-            addApp(found, info);
+        for (ResolveInfo r : pm.queryIntentActivities(normal, 0)) {
+            addApp(found, r);
         }
 
-        List<ResolveInfo> apps =
-            new ArrayList<>(found.values());
-
+        List<ResolveInfo> apps = new ArrayList<>(found.values());
         apps.sort((a, b) ->
             String.CASE_INSENSITIVE_ORDER.compare(
                 a.loadLabel(pm).toString(),
-                b.loadLabel(pm).toString()
-            )
-        );
+                b.loadLabel(pm).toString()));
 
         if (apps.isEmpty()) {
-            TextView empty = text(
-                "No launchable apps found.",
-                16, Color.WHITE, false
-            );
+            TextView empty = makeText(
+                "No launchable apps found.", 16, white, false);
             appRow.addView(empty);
             return;
         }
@@ -296,14 +299,10 @@ public class MainActivity extends Activity {
     }
 
     private void addApp(
-            Map<String, ResolveInfo> found,
-            ResolveInfo info) {
-
+            Map<String, ResolveInfo> found, ResolveInfo info) {
         if (info.activityInfo == null) return;
 
-        String packageName =
-            info.activityInfo.packageName;
-
+        String packageName = info.activityInfo.packageName;
         if (packageName.equals(getPackageName())) return;
 
         if (!found.containsKey(packageName)) {
@@ -311,110 +310,251 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Cinematic app cards with real icons and remote focus
-    private void addAppCard(
-            ResolveInfo info, PackageManager pm) {
-
-        String appName = info.loadLabel(pm).toString();
-
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
+    private void addAppCard(ResolveInfo info, PackageManager pm) {
+        LinearLayout card = vertical();
         card.setGravity(Gravity.CENTER);
+        card.setPadding(dp(9), dp(12), dp(9), dp(12));
         card.setFocusable(true);
         card.setClickable(true);
-        card.setPadding(dp(9), dp(12), dp(9), dp(12));
+        card.setBackground(gradient(
+            new int[] { 0xFF252B43, 0xFF1B2035 }, 17));
 
-        GradientDrawable normal = new GradientDrawable();
-        normal.setColor(Color.rgb(30, 36, 57));
-        normal.setCornerRadius(dp(17));
-        normal.setStroke(dp(1), Color.rgb(48, 56, 81));
-        card.setBackground(normal);
-
-        LinearLayout.LayoutParams cardParams =
-            new LinearLayout.LayoutParams(dp(150), dp(154));
-        cardParams.setMargins(0, 0, dp(15), 0);
-
-        appRow.addView(card, cardParams);
+        LinearLayout.LayoutParams cp =
+            new LinearLayout.LayoutParams(dp(148), dp(151));
+        cp.setMargins(0, 0, dp(14), 0);
+        appRow.addView(card, cp);
 
         ImageView icon = new ImageView(this);
         icon.setImageDrawable(info.loadIcon(pm));
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
 
-        LinearLayout.LayoutParams iconParams =
-            new LinearLayout.LayoutParams(dp(67), dp(67));
-        iconParams.bottomMargin = dp(12);
+        LinearLayout.LayoutParams iconp =
+            new LinearLayout.LayoutParams(dp(65), dp(65));
+        iconp.bottomMargin = dp(11);
+        card.addView(icon, iconp);
 
-        card.addView(icon, iconParams);
-
-        TextView name = text(
-            appName, 13, Color.WHITE, true);
+        TextView name = makeText(
+            info.loadLabel(pm).toString(), 13, white, true);
         name.setGravity(Gravity.CENTER);
         name.setMaxLines(2);
-
         card.addView(name);
 
-        card.setOnFocusChangeListener((view, focused) -> {
-            GradientDrawable state = new GradientDrawable();
-            state.setCornerRadius(dp(17));
-
+        card.setOnFocusChangeListener((v, focused) -> {
             if (focused) {
-                state.setColor(purple);
-                state.setStroke(dp(2), 0xFFD7CCFF);
-                view.setElevation(dp(8));
-                view.setScaleX(1.06f);
-                view.setScaleY(1.06f);
-            } else {
-                state.setColor(Color.rgb(30, 36, 57));
-                state.setStroke(dp(1),
-                    Color.rgb(48, 56, 81));
-                view.setElevation(0);
-                view.setScaleX(1f);
-                view.setScaleY(1f);
-            }
+                v.setBackground(gradient(
+                    new int[] { accentColor(), accentColor() }, 17));
+                v.setElevation(dp(8));
 
-            view.setBackground(state);
+                if (animations) {
+                    v.animate().scaleX(1.06f).scaleY(1.06f)
+                        .setDuration(160)
+                        .setInterpolator(new DecelerateInterpolator())
+                        .start();
+                } else {
+                    v.setScaleX(1.04f);
+                    v.setScaleY(1.04f);
+                }
+            } else {
+                v.setBackground(gradient(
+                    new int[] { 0xFF252B43, 0xFF1B2035 }, 17));
+                v.setElevation(0);
+
+                if (animations) {
+                    v.animate().scaleX(1f).scaleY(1f)
+                        .setDuration(140).start();
+                } else {
+                    v.setScaleX(1f);
+                    v.setScaleY(1f);
+                }
+            }
         });
 
-        card.setOnClickListener(view -> launchApp(info));
+        card.setOnClickListener(v -> launchApp(info));
     }
 
-    // Keep real app launch handling
     private void launchApp(ResolveInfo info) {
+        if (info.activityInfo == null) return;
+
+        ComponentName component = new ComponentName(
+            info.activityInfo.packageName,
+            info.activityInfo.name);
+
+        Intent launch = new Intent(Intent.ACTION_MAIN);
+        launch.addCategory(Intent.CATEGORY_LAUNCHER);
+        launch.setComponent(component);
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
         try {
-            if (info.activityInfo == null) {
-                Toast.makeText(this,
-                    "App activity not found",
-                    Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            ComponentName component = new ComponentName(
-                info.activityInfo.packageName,
-                info.activityInfo.name
-            );
-
-            Intent launch = new Intent(Intent.ACTION_MAIN);
-            launch.addCategory(Intent.CATEGORY_LAUNCHER);
-            launch.setComponent(component);
-            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
+            startActivity(launch);
+        } catch (Exception first) {
             try {
-                startActivity(launch);
-            } catch (Exception firstError) {
                 Intent tvLaunch = new Intent(Intent.ACTION_MAIN);
                 tvLaunch.addCategory(
                     Intent.CATEGORY_LEANBACK_LAUNCHER);
                 tvLaunch.setComponent(component);
-                tvLaunch.addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK);
+                tvLaunch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(tvLaunch);
+            } catch (Exception second) {
+                Toast.makeText(this,
+                    "Could not open " +
+                    info.loadLabel(getPackageManager()),
+                    Toast.LENGTH_LONG).show();
             }
-
-        } catch (Exception e) {
-            Toast.makeText(this,
-                "Could not open " +
-                info.loadLabel(getPackageManager()),
-                Toast.LENGTH_LONG).show();
         }
+    }
+
+    // Settings panel
+    private void showSettings() {
+        LinearLayout panel = vertical();
+        panel.setPadding(dp(22), dp(20), dp(22), dp(22));
+        panel.setBackground(gradient(
+            new int[] { 0xFF20253B, 0xFF121729 }, 22));
+
+        TextView heading = makeText(
+            "Odyssy Settings", 25, white, true);
+        panel.addView(heading);
+
+        TextView description = makeText(
+            "Personalise your home screen",
+            14, muted, false);
+        LinearLayout.LayoutParams descp =
+            new LinearLayout.LayoutParams(-1, -2);
+        descp.topMargin = dp(5);
+        panel.addView(description, descp);
+
+        addSettingHeading(panel, "WALLPAPER");
+
+        String[] wallpapers = {
+            "Aurora", "Midnight", "Ocean", "Sunset"
+        };
+
+        for (String item : wallpapers) {
+            addOption(panel, item,
+                item.equals(wallpaper), () -> {
+                    wallpaper = item;
+                    saveSettings();
+                    rebuild();
+                });
+        }
+
+        addSettingHeading(panel, "ACCENT COLOUR");
+
+        String[] accents = {
+            "Violet", "Blue", "Pink", "Green", "Amber"
+        };
+
+        for (String item : accents) {
+            addOption(panel, item,
+                item.equals(accent), () -> {
+                    accent = item;
+                    saveSettings();
+                    rebuild();
+                });
+        }
+
+        addSettingHeading(panel, "ANIMATIONS");
+
+        addOption(panel,
+            animations ? "Animations: ON" : "Animations: OFF",
+            true, () -> {
+                animations = !animations;
+                saveSettings();
+                showSettings();
+            });
+
+        addOption(panel, "Close settings", false, () -> {
+            rebuild();
+        });
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.setBackgroundColor(0xFF101426);
+        scroll.addView(panel);
+
+        android.app.AlertDialog dialog =
+            new android.app.AlertDialog.Builder(this)
+                .setView(scroll)
+                .create();
+
+        dialog.setOnDismissListener(d -> {
+            if (!isFinishing()) {
+                // The home screen remains available behind settings.
+            }
+        });
+
+        dialog.show();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(
+                android.R.color.transparent);
+            dialog.getWindow().setLayout(
+                getResources().getDisplayMetrics().widthPixels * 3 / 4,
+                getResources().getDisplayMetrics().heightPixels * 4 / 5);
+        }
+    }
+
+    private void addSettingHeading(
+            LinearLayout panel, String label) {
+        TextView heading = makeText(
+            label, 12, accentColor(), true);
+        LinearLayout.LayoutParams p =
+            new LinearLayout.LayoutParams(-1, -2);
+        p.topMargin = dp(18);
+        p.bottomMargin = dp(5);
+        panel.addView(heading, p);
+    }
+
+    private void addOption(
+            LinearLayout panel,
+            String label,
+            boolean selected,
+            Runnable action) {
+
+        TextView option = makeText(
+            (selected ? "✓   " : "     ") + label,
+            16, white, selected);
+
+        option.setPadding(dp(14), dp(12), dp(14), dp(12));
+        option.setFocusable(true);
+        option.setClickable(true);
+        option.setBackground(rounded(
+            selected ? 0xFF39345F : 0xFF292F46, 12));
+
+        LinearLayout.LayoutParams p =
+            new LinearLayout.LayoutParams(-1, -2);
+        p.topMargin = dp(4);
+        panel.addView(option, p);
+
+        option.setOnClickListener(v -> action.run());
+
+        option.setOnFocusChangeListener((v, focused) -> {
+            if (focused) {
+                v.setBackground(rounded(accentColor(), 12));
+            } else {
+                v.setBackground(rounded(
+                    selected ? 0xFF39345F : 0xFF292F46, 12));
+            }
+        });
+    }
+
+    private void saveSettings() {
+        prefs.edit()
+            .putString("wallpaper", wallpaper)
+            .putString("accent", accent)
+            .putBoolean("animations", animations)
+            .apply();
+    }
+
+    private void rebuild() {
+        buildScreen();
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            showSettings();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 }
