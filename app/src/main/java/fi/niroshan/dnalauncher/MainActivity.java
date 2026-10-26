@@ -557,4 +557,10 @@ public class MainActivity extends Activity {
         }
         return super.onKeyDown(keyCode, event);
     }
-}
+private android.graphics.drawable.GradientDrawable rounded(int color, int radius) {
+    android.graphics.drawable.GradientDrawable drawable =
+            new android.graphics.drawable.GradientDrawable();
+    drawable.setColor(color);
+    drawable.setCornerRadius(radius * getResources().getDisplayMetrics().density);
+    return drawable;
+    }
