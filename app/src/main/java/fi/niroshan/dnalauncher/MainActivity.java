@@ -563,4 +563,5 @@ private android.graphics.drawable.GradientDrawable rounded(int color, int radius
     drawable.setColor(color);
     drawable.setCornerRadius(radius * getResources().getDisplayMetrics().density);
     return drawable;
-    }
+}
+}
