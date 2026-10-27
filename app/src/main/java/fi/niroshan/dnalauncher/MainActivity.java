@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     private LinearLayout servicesRow;
     private View wallpaperView;
     private SharedPreferences prefs;
+    private List<ResolveInfo> currentApps = new ArrayList<>();
 
     private String wallpaper = "Aurora";
     private String accent = "Violet";
@@ -47,6 +48,14 @@ public class MainActivity extends Activity {
     private int dp(float value) {
         return (int) (value *
             getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (prefs != null && recentRow != null) {
+            populateRecentApps(currentApps, getPackageManager());
+        }
     }
 
     @Override
@@ -310,6 +319,7 @@ public class MainActivity extends Activity {
             String.CASE_INSENSITIVE_ORDER.compare(
                 a.loadLabel(pm).toString(),
                 b.loadLabel(pm).toString()));
+        currentApps = apps;
 
         populateStreamingServices(apps, pm);
         populateRecentApps(apps, pm);
