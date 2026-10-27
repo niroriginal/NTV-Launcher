@@ -6,6 +6,12 @@ import android.os.Bundle;
 import android.content.Intent;
 import android.content.ComponentName;
 import android.content.SharedPreferences;
+import android.net.Uri;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
+import android.os.Handler;
+import android.os.Looper;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
@@ -26,6 +32,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.io.InputStream;
+import java.net.URL;
 import java.util.Map;
 
 public class MainActivity extends Activity {
@@ -34,6 +44,20 @@ public class MainActivity extends Activity {
     private LinearLayout appRow;
     private LinearLayout recentRow;
     private LinearLayout servicesRow;
+    private LinearLayout postersRow;
+    private TextView clockText;
+    private TextView dateText;
+    private final Handler clockHandler = new Handler(Looper.getMainLooper());
+    private final Runnable clockTick = new Runnable() {
+        @Override public void run() {
+            if (clockText != null && dateText != null) {
+                Date now = new Date();
+                clockText.setText(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(now));
+                dateText.setText(new SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(now));
+            }
+            clockHandler.postDelayed(this, 1000);
+        }
+    };
     private View wallpaperView;
     private SharedPreferences prefs;
     private List<ResolveInfo> currentApps = new ArrayList<>();
@@ -71,6 +95,12 @@ public class MainActivity extends Activity {
         getWindow().setNavigationBarColor(Color.rgb(10, 12, 25));
 
         buildScreen();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        clockHandler.removeCallbacks(clockTick);
     }
 
     private int accentColor() {
@@ -153,7 +183,7 @@ public class MainActivity extends Activity {
     private void buildScreen() {
         ScrollView page = new ScrollView(this);
         page.setFillViewport(true);
-        page.setBackground(gradient(wallpaperColors(), 0));
+        page.setBackground(homeBackground());
 
         root = vertical();
         root.setPadding(dp(38), dp(24), dp(38), dp(32));
@@ -162,11 +192,23 @@ public class MainActivity extends Activity {
         // Brand header
         LinearLayout header = horizontal();
 
-        TextView logo = makeText("ODYSSY", 29, white, true);
+        TextView logo = makeText("ODYSSEY", 29, white, true);
         header.addView(logo);
 
         TextView suffix = makeText("  TV", 14, accentColor(), true);
         header.addView(suffix);
+
+        LinearLayout clockGroup = vertical();
+        clockGroup.setGravity(Gravity.CENTER);
+        clockText = makeText("--:--", 23, white, true);
+        clockGroup.addView(clockText);
+        dateText = makeText("", 11, muted, false);
+        clockGroup.addView(dateText);
+        LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
+        clockParams.setMargins(dp(18), 0, dp(18), 0);
+        header.addView(clockGroup, clockParams);
+        clockHandler.removeCallbacks(clockTick);
+        clockHandler.post(clockTick);
 
         View spacer = new View(this);
         header.addView(spacer,
@@ -213,7 +255,7 @@ public class MainActivity extends Activity {
         hero.setFocusable(false);
 
         TextView heroTag = makeText(
-            "O D Y S S Y   /   HOME",
+            "O D Y S S E Y   /   HOME",
             12, 0xFFE7E0FF, true);
         hero.addView(heroTag);
 
@@ -238,8 +280,21 @@ public class MainActivity extends Activity {
         hp.topMargin = dp(22);
         root.addView(hero, hp);
 
+        // Curated poster strip; selecting a poster opens a matching installed streaming app.
+        addSectionTitle(root, "Movies to discover", 24);
+        TextView posterHint = makeText("Cinematic picks · select a title to open streaming", 13, muted, false);
+        root.addView(posterHint);
+        HorizontalScrollView posterScroll = new HorizontalScrollView(this);
+        posterScroll.setHorizontalScrollBarEnabled(false);
+        posterScroll.setFocusable(false);
+        postersRow = horizontal();
+        postersRow.setPadding(dp(5), dp(14), dp(12), dp(18));
+        posterScroll.addView(postersRow);
+        root.addView(posterScroll, new LinearLayout.LayoutParams(-1, -2));
+        populateMoviePosters();
+
         // Streaming services: direct app launches, never generic web links.
-        addSectionTitle(root, "Your streaming services", 24);
+        addSectionTitle(root, "Your streaming services", 12);
         TextView servicesHint = makeText(
             "Open your installed streaming apps", 13, muted, false);
         root.addView(servicesHint);
@@ -523,6 +578,18 @@ public class MainActivity extends Activity {
                 showSettings();
             });
 
+        addOption(panel, "Choose custom wallpaper…", false, () -> {
+            Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            pick.addCategory(Intent.CATEGORY_OPENABLE);
+            pick.setType("image/*");
+            startActivityForResult(pick, 741);
+        });
+
+        addOption(panel, "Use built-in wallpaper", false, () -> {
+            prefs.edit().remove("custom_wallpaper_uri").apply();
+            rebuild();
+        });
+
         addOption(panel, "Close settings", false, () -> {
             rebuild();
         });
@@ -731,6 +798,87 @@ public class MainActivity extends Activity {
 
     private void rebuild() {
         buildScreen();
+    }
+
+    private android.graphics.drawable.Drawable homeBackground() {
+        String saved = prefs.getString("custom_wallpaper_uri", null);
+        if (saved != null) {
+            try (InputStream in = getContentResolver().openInputStream(Uri.parse(saved))) {
+                Bitmap bitmap = BitmapFactory.decodeStream(in);
+                if (bitmap != null) return new BitmapDrawable(getResources(), bitmap);
+            } catch (Exception ignored) { }
+        }
+        return gradient(wallpaperColors(), 0);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 741 && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            Uri uri = data.getData();
+            try {
+                getContentResolver().takePersistableUriPermission(uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (Exception ignored) { }
+            prefs.edit().putString("custom_wallpaper_uri", uri.toString()).apply();
+            rebuild();
+        }
+    }
+
+    private void populateMoviePosters() {
+        String[][] movies = new String[][] {
+            {"Dune: Part Two", "1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg"},
+            {"Interstellar", "gEU2QniE6E77NI6lCU6MtxTOUcZ.jpg"},
+            {"Spider-Man: Across the Spider-Verse", "8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg"},
+            {"The Batman", "b0PlSFdDwbyK0cf5RxwDpaOJQvQ.jpg"}
+        };
+        postersRow.removeAllViews();
+        for (String[] movie : movies) {
+            LinearLayout card = vertical();
+            card.setFocusable(true);
+            card.setClickable(true);
+            card.setPadding(dp(7), dp(7), dp(7), dp(8));
+            card.setBackground(gradient(new int[] {0xFF252B43, 0xFF171C30}, 13));
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(dp(142), dp(236));
+            cp.setMargins(0, 0, dp(13), 0);
+            postersRow.addView(card, cp);
+            ImageView poster = new ImageView(this);
+            poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            poster.setBackground(gradient(new int[] {accentColor(), 0xFF101426}, 8));
+            card.addView(poster, new LinearLayout.LayoutParams(-1, dp(184)));
+            TextView title = makeText(movie[0], 12, white, true);
+            title.setMaxLines(2);
+            title.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-1, 0, 1);
+            tp.topMargin = dp(5);
+            card.addView(title, tp);
+            card.setOnFocusChangeListener((v, focused) -> {
+                v.setBackground(gradient(focused ? new int[] {accentColor(), accentColor()} : new int[] {0xFF252B43, 0xFF171C30}, 13));
+                v.animate().scaleX(focused ? 1.05f : 1f).scaleY(focused ? 1.05f : 1f).setDuration(160).start();
+            });
+            card.setOnClickListener(v -> openStreamingDestination());
+            final String posterUrl = "https://image.tmdb.org/t/p/w342/" + movie[1];
+            Thread loader = new Thread(() -> {
+                try (InputStream in = new URL(posterUrl).openStream()) {
+                    Bitmap bitmap = BitmapFactory.decodeStream(in);
+                    if (bitmap != null) runOnUiThread(() -> poster.setImageBitmap(bitmap));
+                } catch (Exception ignored) { }
+            });
+            loader.setDaemon(true);
+            loader.start();
+        }
+    }
+
+    private void openStreamingDestination() {
+        PackageManager pm = getPackageManager();
+        String[] packages = {"com.netflix.ninja", "com.apple.atve.androidtv.appletv", "com.apple.atve.sony.appletv"};
+        for (String packageName : packages) {
+            Intent launch = pm.getLaunchIntentForPackage(packageName);
+            if (launch != null) {
+                try { startActivity(launch); return; } catch (Exception ignored) { }
+            }
+        }
+        Toast.makeText(this, "Install Netflix or Apple TV to open streaming titles.", Toast.LENGTH_LONG).show();
     }
 
     @Override
