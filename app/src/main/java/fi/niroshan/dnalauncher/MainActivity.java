@@ -52,7 +52,7 @@ public class MainActivity extends Activity {
         @Override public void run() {
             if (clockText != null && dateText != null) {
                 Date now = new Date();
-                clockText.setText(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(now));
+                clockText.setText(new SimpleDateFormat(clockFormat.equals("12-hour") ? "h:mm a" : "HH:mm", Locale.getDefault()).format(now));
                 dateText.setText(new SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(now));
             }
             clockHandler.postDelayed(this, 1000);
@@ -65,6 +65,13 @@ public class MainActivity extends Activity {
     private String wallpaper = "Aurora";
     private String accent = "Violet";
     private boolean animations = true;
+    private String iconAnimation = "Bounce";
+    private String iconSize = "Medium";
+    private String cardSize = "Standard";
+    private String clockFormat = "24-hour";
+    private boolean showPosters = true;
+    private boolean showServices = true;
+    private boolean showRecent = true;
 
     private final int white = Color.WHITE;
     private final int muted = 0xFFB8C1D8;
@@ -77,6 +84,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (prefs != null) clockHandler.post(clockTick);
         if (prefs != null && recentRow != null) {
             populateRecentApps(currentApps, getPackageManager());
         }
@@ -90,6 +98,13 @@ public class MainActivity extends Activity {
         wallpaper = prefs.getString("wallpaper", "Aurora");
         accent = prefs.getString("accent", "Violet");
         animations = prefs.getBoolean("animations", true);
+        iconAnimation = prefs.getString("icon_animation", "Bounce");
+        iconSize = prefs.getString("icon_size", "Medium");
+        cardSize = prefs.getString("card_size", "Standard");
+        clockFormat = prefs.getString("clock_format", "24-hour");
+        showPosters = prefs.getBoolean("show_posters", true);
+        showServices = prefs.getBoolean("show_services", true);
+        showRecent = prefs.getBoolean("show_recent", true);
 
         getWindow().setStatusBarColor(Color.rgb(10, 12, 25));
         getWindow().setNavigationBarColor(Color.rgb(10, 12, 25));
@@ -281,6 +296,7 @@ public class MainActivity extends Activity {
         root.addView(hero, hp);
 
         // Curated poster strip; selecting a poster opens a matching installed streaming app.
+        if (showPosters) {
         addSectionTitle(root, "Movies to discover", 24);
         TextView posterHint = makeText("Cinematic picks · select a title to open streaming", 13, muted, false);
         root.addView(posterHint);
@@ -292,8 +308,10 @@ public class MainActivity extends Activity {
         posterScroll.addView(postersRow);
         root.addView(posterScroll, new LinearLayout.LayoutParams(-1, -2));
         populateMoviePosters();
+        }
 
         // Streaming services: direct app launches, never generic web links.
+        if (showServices) {
         addSectionTitle(root, "Your streaming services", 12);
         TextView servicesHint = makeText(
             "Open your installed streaming apps", 13, muted, false);
@@ -305,7 +323,9 @@ public class MainActivity extends Activity {
         servicesRow.setPadding(dp(5), dp(14), dp(12), dp(18));
         servicesScroll.addView(servicesRow);
         root.addView(servicesScroll, new LinearLayout.LayoutParams(-1, -2));
+        }
 
+        if (showRecent) {
         addSectionTitle(root, "Recently opened", 8);
         TextView recentHint = makeText(
             "Apps you launched recently on this device", 13, muted, false);
@@ -317,6 +337,7 @@ public class MainActivity extends Activity {
         recentRow.setPadding(dp(5), dp(14), dp(12), dp(18));
         recentScroll.addView(recentRow);
         root.addView(recentScroll, new LinearLayout.LayoutParams(-1, -2));
+        }
 
         TextView appsTitle = makeText(
             "All your apps", 23, white, true);
@@ -414,8 +435,10 @@ public class MainActivity extends Activity {
         card.setBackground(gradient(
             new int[] { 0xFF252B43, 0xFF1B2035 }, 17));
 
+        int cardWidth = cardSize.equals("Compact") ? 124 : (cardSize.equals("Large") ? 174 : 148);
+        int cardHeight = cardSize.equals("Compact") ? 132 : (cardSize.equals("Large") ? 178 : 151);
         LinearLayout.LayoutParams cp =
-            new LinearLayout.LayoutParams(dp(148), dp(151));
+            new LinearLayout.LayoutParams(dp(cardWidth), dp(cardHeight));
         cp.setMargins(0, 0, dp(14), 0);
         appRow.addView(card, cp);
 
@@ -423,8 +446,9 @@ public class MainActivity extends Activity {
         icon.setImageDrawable(info.loadIcon(pm));
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
 
+        int iconDp = iconSize.equals("Small") ? 48 : (iconSize.equals("Large") ? 82 : 65);
         LinearLayout.LayoutParams iconp =
-            new LinearLayout.LayoutParams(dp(65), dp(65));
+            new LinearLayout.LayoutParams(dp(iconDp), dp(iconDp));
         iconp.bottomMargin = dp(11);
         card.addView(icon, iconp);
 
@@ -446,13 +470,18 @@ public class MainActivity extends Activity {
                         .setInterpolator(new DecelerateInterpolator())
                         .start();
                     icon.animate().cancel();
-                    icon.setRotation(-5f);
+                    icon.setRotation(iconAnimation.equals("Spin") ? -35f : (iconAnimation.equals("Tilt") ? -8f : 0f));
                     icon.setAlpha(0.82f);
-                    icon.animate().rotation(0f).alpha(1f)
-                        .scaleX(1.12f).scaleY(1.12f)
-                        .setDuration(240)
-                        .setInterpolator(new DecelerateInterpolator())
-                        .start();
+                    android.view.ViewPropertyAnimator iconAnimator = icon.animate().alpha(1f)
+                        .scaleX(iconAnimation.equals("Off") ? 1f : 1.12f)
+                        .scaleY(iconAnimation.equals("Off") ? 1f : 1.12f)
+                        .setDuration(260)
+                        .setInterpolator(new DecelerateInterpolator());
+                    if (iconAnimation.equals("Spin")) iconAnimator.rotationBy(395f);
+                    else if (iconAnimation.equals("Tilt")) iconAnimator.rotation(0f);
+                    else if (iconAnimation.equals("Bounce")) iconAnimator.rotation(0f).translationY(-dp(5)).withEndAction(() -> icon.animate().translationY(0f).setDuration(140).start());
+                    else iconAnimator.rotation(0f);
+                    iconAnimator.start();
                 } else {
                     v.setScaleX(1.04f);
                     v.setScaleY(1.04f);
@@ -568,6 +597,60 @@ public class MainActivity extends Activity {
                 });
         }
 
+        addSettingHeading(panel, "ICON ANIMATION");
+        String[] iconModes = {"Bounce", "Spin", "Tilt", "Off"};
+        for (String mode : iconModes) {
+            addOption(panel, mode, mode.equals(iconAnimation), () -> {
+                iconAnimation = mode;
+                prefs.edit().putString("icon_animation", iconAnimation).apply();
+                rebuild();
+            });
+        }
+
+        addSettingHeading(panel, "ICON SIZE");
+        for (String size : new String[] {"Small", "Medium", "Large"}) {
+            addOption(panel, size, size.equals(iconSize), () -> {
+                iconSize = size;
+                prefs.edit().putString("icon_size", iconSize).apply();
+                rebuild();
+            });
+        }
+
+        addSettingHeading(panel, "APP CARD SIZE");
+        for (String size : new String[] {"Compact", "Standard", "Large"}) {
+            addOption(panel, size, size.equals(cardSize), () -> {
+                cardSize = size;
+                prefs.edit().putString("card_size", cardSize).apply();
+                rebuild();
+            });
+        }
+
+        addSettingHeading(panel, "CLOCK FORMAT");
+        for (String format : new String[] {"24-hour", "12-hour"}) {
+            addOption(panel, format, format.equals(clockFormat), () -> {
+                clockFormat = format;
+                prefs.edit().putString("clock_format", clockFormat).apply();
+                rebuild();
+            });
+        }
+
+        addSettingHeading(panel, "HOME SCREEN SECTIONS");
+        addOption(panel, showPosters ? "Movie posters: ON" : "Movie posters: OFF", true, () -> {
+            showPosters = !showPosters;
+            prefs.edit().putBoolean("show_posters", showPosters).apply();
+            rebuild();
+        });
+        addOption(panel, showServices ? "Streaming services: ON" : "Streaming services: OFF", true, () -> {
+            showServices = !showServices;
+            prefs.edit().putBoolean("show_services", showServices).apply();
+            rebuild();
+        });
+        addOption(panel, showRecent ? "Recently opened: ON" : "Recently opened: OFF", true, () -> {
+            showRecent = !showRecent;
+            prefs.edit().putBoolean("show_recent", showRecent).apply();
+            rebuild();
+        });
+
         addSettingHeading(panel, "ANIMATIONS");
 
         addOption(panel,
@@ -670,6 +753,13 @@ public class MainActivity extends Activity {
             .putString("wallpaper", wallpaper)
             .putString("accent", accent)
             .putBoolean("animations", animations)
+            .putString("icon_animation", iconAnimation)
+            .putString("icon_size", iconSize)
+            .putString("card_size", cardSize)
+            .putString("clock_format", clockFormat)
+            .putBoolean("show_posters", showPosters)
+            .putBoolean("show_services", showServices)
+            .putBoolean("show_recent", showRecent)
             .apply();
     }
 
@@ -805,7 +895,11 @@ public class MainActivity extends Activity {
         if (saved != null) {
             try (InputStream in = getContentResolver().openInputStream(Uri.parse(saved))) {
                 Bitmap bitmap = BitmapFactory.decodeStream(in);
-                if (bitmap != null) return new BitmapDrawable(getResources(), bitmap);
+                if (bitmap != null) {
+                    BitmapDrawable drawable = new BitmapDrawable(getResources(), bitmap);
+                    drawable.setGravity(Gravity.FILL);
+                    return drawable;
+                }
             } catch (Exception ignored) { }
         }
         return gradient(wallpaperColors(), 0);
