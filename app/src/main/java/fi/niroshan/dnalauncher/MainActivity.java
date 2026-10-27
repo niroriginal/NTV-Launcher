@@ -386,25 +386,45 @@ public class MainActivity extends Activity {
                 v.setElevation(dp(8));
 
                 if (animations) {
-                    v.animate().scaleX(1.06f).scaleY(1.06f)
-                        .setDuration(160)
+                    v.animate().scaleX(1.07f).scaleY(1.07f)
+                        .setDuration(190)
+                        .setInterpolator(new DecelerateInterpolator())
+                        .start();
+                    icon.animate().cancel();
+                    icon.setRotation(-5f);
+                    icon.setAlpha(0.82f);
+                    icon.animate().rotation(0f).alpha(1f)
+                        .scaleX(1.12f).scaleY(1.12f)
+                        .setDuration(240)
                         .setInterpolator(new DecelerateInterpolator())
                         .start();
                 } else {
                     v.setScaleX(1.04f);
                     v.setScaleY(1.04f);
+                    icon.setRotation(0f);
+                    icon.setAlpha(1f);
+                    icon.setScaleX(1f);
+                    icon.setScaleY(1f);
                 }
             } else {
                 v.setBackground(gradient(
                     new int[] { 0xFF252B43, 0xFF1B2035 }, 17));
                 v.setElevation(0);
+                icon.animate().cancel();
 
                 if (animations) {
                     v.animate().scaleX(1f).scaleY(1f)
-                        .setDuration(140).start();
+                        .setDuration(150).start();
+                    icon.animate().rotation(0f).alpha(1f)
+                        .scaleX(1f).scaleY(1f)
+                        .setDuration(150).start();
                 } else {
                     v.setScaleX(1f);
                     v.setScaleY(1f);
+                    icon.setRotation(0f);
+                    icon.setAlpha(1f);
+                    icon.setScaleX(1f);
+                    icon.setScaleY(1f);
                 }
             }
         });
