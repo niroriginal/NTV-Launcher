@@ -32,6 +32,8 @@ public class MainActivity extends Activity {
 
     private LinearLayout root;
     private LinearLayout appRow;
+    private LinearLayout recentRow;
+    private LinearLayout servicesRow;
     private View wallpaperView;
     private SharedPreferences prefs;
 
@@ -227,8 +229,33 @@ public class MainActivity extends Activity {
         hp.topMargin = dp(22);
         root.addView(hero, hp);
 
+        // Streaming services: direct app launches, never generic web links.
+        addSectionTitle(root, "Your streaming services", 24);
+        TextView servicesHint = makeText(
+            "Open your installed streaming apps", 13, muted, false);
+        root.addView(servicesHint);
+        HorizontalScrollView servicesScroll = new HorizontalScrollView(this);
+        servicesScroll.setHorizontalScrollBarEnabled(false);
+        servicesScroll.setFocusable(false);
+        servicesRow = horizontal();
+        servicesRow.setPadding(dp(5), dp(14), dp(12), dp(18));
+        servicesScroll.addView(servicesRow);
+        root.addView(servicesScroll, new LinearLayout.LayoutParams(-1, -2));
+
+        addSectionTitle(root, "Recently opened", 8);
+        TextView recentHint = makeText(
+            "Apps you launched recently on this device", 13, muted, false);
+        root.addView(recentHint);
+        HorizontalScrollView recentScroll = new HorizontalScrollView(this);
+        recentScroll.setHorizontalScrollBarEnabled(false);
+        recentScroll.setFocusable(false);
+        recentRow = horizontal();
+        recentRow.setPadding(dp(5), dp(14), dp(12), dp(18));
+        recentScroll.addView(recentRow);
+        root.addView(recentScroll, new LinearLayout.LayoutParams(-1, -2));
+
         TextView appsTitle = makeText(
-            "Your apps", 23, white, true);
+            "All your apps", 23, white, true);
         LinearLayout.LayoutParams atp =
             new LinearLayout.LayoutParams(-1, -2);
         atp.topMargin = dp(26);
@@ -283,6 +310,9 @@ public class MainActivity extends Activity {
             String.CASE_INSENSITIVE_ORDER.compare(
                 a.loadLabel(pm).toString(),
                 b.loadLabel(pm).toString()));
+
+        populateStreamingServices(apps, pm);
+        populateRecentApps(apps, pm);
 
         if (apps.isEmpty()) {
             TextView empty = makeText(
@@ -374,6 +404,7 @@ public class MainActivity extends Activity {
 
     private void launchApp(ResolveInfo info) {
         if (info.activityInfo == null) return;
+        rememberRecentApp(info.activityInfo.packageName);
 
         ComponentName component = new ComponentName(
             info.activityInfo.packageName,
@@ -543,6 +574,129 @@ public class MainActivity extends Activity {
             .putString("accent", accent)
             .putBoolean("animations", animations)
             .apply();
+    }
+
+    private void addSectionTitle(LinearLayout parent, String title, int topMarginDp) {
+        TextView heading = makeText(title, 23, white, true);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.topMargin = dp(topMarginDp);
+        parent.addView(heading, params);
+    }
+
+    private void populateStreamingServices(List<ResolveInfo> apps, PackageManager pm) {
+        servicesRow.removeAllViews();
+        addDetectedService(apps, pm, "Netflix", new String[] {
+            "com.netflix.ninja", "netflix"
+        });
+        addDetectedService(apps, pm, "Apple TV", new String[] {
+            "com.apple.atve.androidtv.appletv", "com.apple.atve.sony.appletv", "apple tv", "appletv"
+        });
+        if (servicesRow.getChildCount() == 0) {
+            TextView note = makeText(
+                "Netflix and Apple TV will appear here when installed and visible to Android.",
+                14, muted, false);
+            servicesRow.addView(note);
+        }
+    }
+
+    private void addDetectedService(List<ResolveInfo> apps, PackageManager pm,
+                                    String serviceName, String[] identifiers) {
+        ResolveInfo match = null;
+        for (ResolveInfo info : apps) {
+            if (info.activityInfo == null) continue;
+            String packageName = info.activityInfo.packageName.toLowerCase(Locale.ROOT);
+            String label = info.loadLabel(pm).toString().toLowerCase(Locale.ROOT);
+            for (String id : identifiers) {
+                String key = id.toLowerCase(Locale.ROOT);
+                if (packageName.contains(key) || label.contains(key)) {
+                    match = info;
+                    break;
+                }
+            }
+            if (match != null) break;
+        }
+        if (match == null) return;
+        addLaunchCard(servicesRow, serviceName, "Open streaming app", match, pm, true);
+    }
+
+    private void populateRecentApps(List<ResolveInfo> apps, PackageManager pm) {
+        recentRow.removeAllViews();
+        String saved = prefs.getString("recent_packages", "");
+        if (saved.isEmpty()) {
+            TextView note = makeText(
+                "Your recently opened apps will appear here.", 14, muted, false);
+            recentRow.addView(note);
+            return;
+        }
+
+        String[] packages = saved.split("\\|");
+        int count = 0;
+        for (String packageName : packages) {
+            if (count >= 8) break;
+            for (ResolveInfo info : apps) {
+                if (info.activityInfo != null
+                        && packageName.equals(info.activityInfo.packageName)) {
+                    addLaunchCard(recentRow, info.loadLabel(pm).toString(),
+                        "Recently opened", info, pm, false);
+                    count++;
+                    break;
+                }
+            }
+        }
+        if (count == 0) {
+            TextView note = makeText(
+                "Your recently opened apps will appear here.", 14, muted, false);
+            recentRow.addView(note);
+        }
+    }
+
+    private void rememberRecentApp(String packageName) {
+        String existing = prefs.getString("recent_packages", "");
+        List<String> recent = new ArrayList<>();
+        recent.add(packageName);
+        if (!existing.isEmpty()) {
+            for (String item : existing.split("\\|")) {
+                if (!item.equals(packageName) && !item.isEmpty() && recent.size() < 8) {
+                    recent.add(item);
+                }
+            }
+        }
+        StringBuilder saved = new StringBuilder();
+        for (String item : recent) {
+            if (saved.length() > 0) saved.append('|');
+            saved.append(item);
+        }
+        prefs.edit().putString("recent_packages", saved.toString()).apply();
+    }
+
+    private void addLaunchCard(LinearLayout parent, String title, String subtitle,
+                               ResolveInfo info, PackageManager pm, boolean service) {
+        LinearLayout card = vertical();
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(18), dp(14), dp(18), dp(14));
+        card.setFocusable(true);
+        card.setClickable(true);
+        card.setBackground(gradient(new int[] { 0xFF252B43, 0xFF171C30 }, 18));
+
+        TextView name = makeText(title, 18, white, true);
+        card.addView(name);
+        TextView detail = makeText(subtitle, 12, muted, false);
+        LinearLayout.LayoutParams detailParams = new LinearLayout.LayoutParams(-1, -2);
+        detailParams.topMargin = dp(5);
+        card.addView(detail, detailParams);
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(service ? 220 : 190), dp(82));
+        params.setMargins(0, 0, dp(12), 0);
+        parent.addView(card, params);
+
+        card.setOnFocusChangeListener((v, focused) -> {
+            v.setBackground(gradient(
+                focused ? new int[] { accentColor(), accentColor() }
+                        : new int[] { 0xFF252B43, 0xFF171C30 }, 18));
+            v.setScaleX(focused ? 1.04f : 1f);
+            v.setScaleY(focused ? 1.04f : 1f);
+        });
+        card.setOnClickListener(v -> launchApp(info));
     }
 
     private void rebuild() {
